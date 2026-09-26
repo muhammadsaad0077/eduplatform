@@ -384,6 +384,8 @@ class AssignmentService:
             # Apply status filter if provided
             if status and assignment_status != status:
                 continue
+
+            class_size = self._get_class_size(assignment._class_id)
                 
             result.append({
                 'id': assignment._id,
@@ -394,7 +396,7 @@ class AssignmentService:
                 'status': assignment_status,
                 'total_submissions': total_submissions,
                 'graded_submissions': graded_submissions,
-                'submission_rate': (total_submissions / 25) * 100,  # Assuming 25 students per class
+                'submission_rate': (total_submissions / class_size * 100) if class_size else None,  
                 'max_points': assignment._max_points,
                 'difficulty': assignment._difficulty.value,
                 'created_at': assignment._created_at.isoformat()
@@ -461,3 +463,8 @@ class AssignmentService:
         grades = [s.get('grade') for s in assignment._submissions.values() 
                  if s.get('grade') is not None]
         return sum(grades) / len(grades) if grades else 0.0
+
+    # new helper, added near _calculate_average_grade:
+    def _get_class_size(self, class_id: str) -> int:
+        """Get the number of students actually enrolled in a class."""
+        return sum(1 for student in self.user_repo.get_students() if student.grade == class_id)

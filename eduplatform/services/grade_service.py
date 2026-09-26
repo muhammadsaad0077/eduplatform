@@ -20,6 +20,28 @@ class GradeService:
         self.grade_repo = grade_repo
         self.user_repo = user_repo
         self.notification_repo = notification_repo
+
+    # new helper, added once, right after __init__
+    def _serialize_grade(self, grade: Grade) -> Dict[str, Any]:
+        """Convert a Grade into the dict shape used by every grade-listing endpoint."""
+        teacher = self.user_repo.get(grade._teacher_id)
+        return {
+            'id': grade._id, 'subject': grade._subject, 'type': grade._type.value,
+            'score': grade._score, 'max_score': grade._max_score,
+            'percentage': grade.percentage, 'letter_grade': grade.letter_grade,
+            'gpa_points': grade.gpa_points, 'comments': grade._comments,
+            'teacher_id': grade._teacher_id,
+            'teacher_name': teacher._full_name if teacher else 'Unknown',
+            'assignment_id': grade._assignment_id,
+            'created_at': grade._created_at.isoformat(),
+            'updated_at': grade._updated_at.isoformat() if grade._updated_at else None
+        }
+
+    # get_student_grades now just does:
+    result = [self._serialize_grade(grade) for grade in grades]
+
+    # get_class_grades now just does:
+    student_grades = [self._serialize_grade(grade) for grade in grades]
     
     def record_grade(self,
                     student_id: str,
@@ -238,28 +260,7 @@ class GradeService:
             grades = [g for g in grades if g._created_at >= start_date]
         if end_date:
             grades = [g for g in grades if g._created_at <= end_date]
-            
-        # Convert to dictionary format with additional metadata
-        result = []
-        for grade in grades:
-            teacher = self.user_repo.get(grade._teacher_id)
-            result.append({
-                'id': grade._id,
-                'subject': grade._subject,
-                'type': grade._type.value,
-                'score': grade._score,
-                'max_score': grade._max_score,
-                'percentage': grade.percentage,
-                'letter_grade': grade.letter_grade,
-                'gpa_points': grade.gpa_points,
-                'comments': grade._comments,
-                'teacher_id': grade._teacher_id,
-                'teacher_name': teacher._full_name if teacher else 'Unknown',
-                'assignment_id': grade._assignment_id,
-                'created_at': grade._created_at.isoformat(),
-                'updated_at': grade._updated_at.isoformat() if grade._updated_at else None
-            })
-            
+             
         # Sort by creation date (newest first)
         result.sort(key=lambda x: x['created_at'], reverse=True)
         return result
@@ -294,26 +295,7 @@ class GradeService:
             if not student:
                 continue
                 
-            student_grades = []
-            for grade in grades:
-                teacher = self.user_repo.get(grade._teacher_id)
-                student_grades.append({
-                    'id': grade._id,
-                    'subject': grade._subject,
-                    'type': grade._type.value,
-                    'score': grade._score,
-                    'max_score': grade._max_score,
-                    'percentage': grade.percentage,
-                    'letter_grade': grade.letter_grade,
-                    'gpa_points': grade.gpa_points,
-                    'comments': grade._comments,
-                    'teacher_id': grade._teacher_id,
-                    'teacher_name': teacher._full_name if teacher else 'Unknown',
-                    'assignment_id': grade._assignment_id,
-                    'created_at': grade._created_at.isoformat(),
-                    'updated_at': grade._updated_at.isoformat() if grade._updated_at else None
-                })
-                
+                 
             # Sort by creation date (newest first)
             student_grades.sort(key=lambda x: x['created_at'], reverse=True)
             

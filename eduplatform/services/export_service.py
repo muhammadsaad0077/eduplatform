@@ -2,6 +2,8 @@
 Service for exporting application data to various formats.
 """
 import os
+import json
+import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union, Type, TypeVar, cast
 from pathlib import Path
@@ -19,6 +21,8 @@ from .auth_service import AuthService
 from .assignment_service import AssignmentService
 from .grade_service import GradeService
 
+logger = logging.getLogger(__name__)
+
 class ExportService:
     """Service for exporting application data to various formats."""
     
@@ -31,6 +35,38 @@ class ExportService:
         self.assignment_service = assignment_service
         self.grade_service = grade_service
         self.export_utils = ExportUtils()
+
+    # --- new shared helpers, added once, right after __init__ ---
+    def _export_datasets(self, datasets, output_dir, base_filename, format):
+        """Export each non-empty named dataset; used by all three export_* methods."""
+        result = {}
+        for data_type, data in datasets.items():
+            if not data:
+                continue
+            filename = f"{base_filename}_{data_type}.{format}"
+            output_path = os.path.join(output_dir, filename)
+            try:
+                result[data_type] = self.export_utils.export_data(
+                    data=data, output_path=output_path, format=format,
+                    sheet_name=data_type.replace('_', ' ').title()
+                )
+            except Exception:
+                logger.warning("Failed to export dataset '%s'", data_type, exc_info=True)
+        return result
+
+    def _write_manifest(self, output_dir, base_filename, manifest_body):
+        manifest_path = os.path.join(output_dir, f"{base_filename}_manifest.json")
+        with open(manifest_path, 'w') as f:
+            json.dump({'export': manifest_body}, f, indent=2)
+        return manifest_path
+
+    # --- each export_* method now ends with just: ---
+    result = self._export_datasets(export_data, output_dir, base_filename, format)
+    result['manifest'] = self._write_manifest(output_dir, base_filename, {
+    'user_id': user_id, 'user_name': user._full_name, 'timestamp': timestamp,
+    'exported_data': list(result.keys()), 'file_paths': result
+    })
+    return result
     
     def export_user_data(self, 
                         user_id: str,
@@ -68,47 +104,6 @@ class ExportService:
             'notifications': self._prepare_user_notifications(user_id)
         }
         
-        # Export to specified format
-        result = {}
-        for data_type, data in export_data.items():
-            if not data:
-                continue
-                
-            filename = f"{base_filename}_{data_type}.{format}"
-            output_path = os.path.join(output_dir, filename)
-            
-            try:
-                exported_path = self.export_utils.export_data(
-                    data=data,
-                    output_path=output_path,
-                    format=format,
-                    sheet_name=data_type.replace('_', ' ').title()
-                )
-                result[data_type] = exported_path
-            except Exception as e:
-                # Continue with other exports if one fails
-                print(f"Warning: Failed to export {data_type}: {str(e)}")
-                continue
-        
-        # Create a manifest file
-        manifest = {
-            'export': {
-                'user_id': user_id,
-                'user_name': user._full_name,
-                'timestamp': timestamp,
-                'exported_data': list(result.keys()),
-                'file_paths': result
-            }
-        }
-        
-        # Save manifest
-        manifest_path = os.path.join(output_dir, f"{base_filename}_manifest.json")
-        with open(manifest_path, 'w') as f:
-            import json
-            json.dump(manifest, f, indent=2)
-        
-        result['manifest'] = manifest_path
-        return result
     
     def export_class_data(self,
                          class_id: str,
@@ -189,48 +184,6 @@ class ExportService:
             }
             class_data['assignments'].append(assignment_data)
         
-        # Export to specified format
-        result = {}
-        for data_type, data in class_data.items():
-            if not data:
-                continue
-                
-            filename = f"{base_filename}_{data_type}.{format}"
-            output_path = os.path.join(output_dir, filename)
-            
-            try:
-                exported_path = self.export_utils.export_data(
-                    data=data,
-                    output_path=output_path,
-                    format=format,
-                    sheet_name=data_type.replace('_', ' ').title()
-                )
-                result[data_type] = exported_path
-            except Exception as e:
-                # Continue with other exports if one fails
-                print(f"Warning: Failed to export {data_type}: {str(e)}")
-                continue
-        
-        # Create a manifest file
-        manifest = {
-            'export': {
-                'class_id': class_id,
-                'timestamp': timestamp,
-                'exported_data': list(result.keys()),
-                'student_count': len(students),
-                'assignment_count': len(assignments),
-                'file_paths': result
-            }
-        }
-        
-        # Save manifest
-        manifest_path = os.path.join(output_dir, f"{base_filename}_manifest.json")
-        with open(manifest_path, 'w') as f:
-            import json
-            json.dump(manifest, f, indent=2)
-        
-        result['manifest'] = manifest_path
-        return result
     
     def export_school_data(self,
                           output_dir: str = 'exports',
@@ -281,52 +234,6 @@ class ExportService:
             all_grades.extend(grades)
         export_data['grades'] = all_grades
         
-        # Export to specified format
-        result = {}
-        for data_type, data in export_data.items():
-            if not data:
-                continue
-                
-            filename = f"{base_filename}_{data_type}.{format}"
-            output_path = os.path.join(output_dir, filename)
-            
-            try:
-                exported_path = self.export_utils.export_data(
-                    data=data,
-                    output_path=output_path,
-                    format=format,
-                    sheet_name=data_type.replace('_', ' ').title()
-                )
-                result[data_type] = exported_path
-            except Exception as e:
-                # Continue with other exports if one fails
-                print(f"Warning: Failed to export {data_type}: {str(e)}")
-                continue
-        
-        # Create a manifest file
-        manifest = {
-            'export': {
-                'type': 'full_school_export',
-                'timestamp': timestamp,
-                'student_count': len(students),
-                'teacher_count': len(teachers),
-                'parent_count': len(parents),
-                'admin_count': len(admins),
-                'assignment_count': len(export_data.get('assignments', [])),
-                'grade_count': len(all_grades),
-                'exported_data': list(result.keys()),
-                'file_paths': result
-            }
-        }
-        
-        # Save manifest
-        manifest_path = os.path.join(output_dir, f"{base_filename}_manifest.json")
-        with open(manifest_path, 'w') as f:
-            import json
-            json.dump(manifest, f, indent=2)
-        
-        result['manifest'] = manifest_path
-        return result
     
     # Helper methods for data preparation
     
