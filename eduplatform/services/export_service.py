@@ -60,14 +60,6 @@ class ExportService:
             json.dump({'export': manifest_body}, f, indent=2)
         return manifest_path
 
-    # --- each export_* method now ends with just: ---
-    result = self._export_datasets(export_data, output_dir, base_filename, format)
-    result['manifest'] = self._write_manifest(output_dir, base_filename, {
-    'user_id': user_id, 'user_name': user._full_name, 'timestamp': timestamp,
-    'exported_data': list(result.keys()), 'file_paths': result
-    })
-    return result
-    
     def export_user_data(self, 
                         user_id: str,
                         output_dir: str = 'exports',
@@ -104,7 +96,13 @@ class ExportService:
             'notifications': self._prepare_user_notifications(user_id)
         }
         
-    
+        result = self._export_datasets(export_data, output_dir, base_filename, format)
+        result['manifest'] = self._write_manifest(output_dir, base_filename, {
+            'user_id': user_id, 'user_name': user._full_name, 'timestamp': timestamp,
+            'exported_data': list(result.keys()), 'file_paths': result
+        })
+        return result
+
     def export_class_data(self,
                          class_id: str,
                          output_dir: str = 'exports',
@@ -184,7 +182,13 @@ class ExportService:
             }
             class_data['assignments'].append(assignment_data)
         
-    
+        result = self._export_datasets(class_data, output_dir, base_filename, format)
+        result['manifest'] = self._write_manifest(output_dir, base_filename, {
+            'class_id': class_id, 'timestamp': timestamp,
+            'exported_data': list(result.keys()), 'file_paths': result
+        })
+        return result
+
     def export_school_data(self,
                           output_dir: str = 'exports',
                           format: str = 'xlsx') -> Dict[str, str]:
@@ -233,6 +237,13 @@ class ExportService:
             grades = self.grade_service.get_student_grades(student._id)
             all_grades.extend(grades)
         export_data['grades'] = all_grades
+        
+        result = self._export_datasets(export_data, output_dir, base_filename, format)
+        result['manifest'] = self._write_manifest(output_dir, base_filename, {
+            'timestamp': timestamp,
+            'exported_data': list(result.keys()), 'file_paths': result
+        })
+        return result
         
     
     # Helper methods for data preparation

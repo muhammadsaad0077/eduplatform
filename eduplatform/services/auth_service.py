@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 class AuthService:
     """Service for handling authentication and user management."""
     
+    PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)   # module/class-level constant
+    
     def __init__(self, 
                  user_repository: UserRepository,
                  notification_repository: NotificationRepository,
@@ -26,20 +28,7 @@ class AuthService:
         self.notification_repo = notification_repository
         self.jwt_secret = jwt_secret
         self.jwt_expire_hours = jwt_expire_hours
-    
-    import logging
-import secrets
-from typing import Optional, Dict, Any, Type, Union
-from datetime import datetime, timedelta
-import jwt
-...
-
-logger = logging.getLogger(__name__)
-
-class AuthService:
-    def __init__(self, user_repository, notification_repository, jwt_secret, jwt_expire_hours=24):
-        ...
-        self._reset_tokens: Dict[str, Dict[str, Any]] = {}   # used by fix #2 below
+        self._reset_tokens: Dict[str, Dict[str, Any]] = {}
 
     def register_user(self, user_type, full_name, email, password, **kwargs):
         logger.info("Registering new %s (email=%s)", user_type.__name__, email)
@@ -112,49 +101,47 @@ class AuthService:
             'token': token,
             'user_type': self.user_repo.get_user_type(user)
         }
-    
-    PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)   # module-level constant
 
     def reset_password_request(self, email: str) -> bool:
-      user = self.user_repo.get_by_email(email)
-      if user:
-        reset_token = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + PASSWORD_RESET_TOKEN_TTL
-        self._reset_tokens[reset_token] = {'email': email, 'expires_at': expires_at}
+        user = self.user_repo.get_by_email(email)
+        if user:
+            reset_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now() + self.PASSWORD_RESET_TOKEN_TTL
+            self._reset_tokens[reset_token] = {'email': email, 'expires_at': expires_at}
 
-        reset_url = f"https://eduplatform.example.com/reset-password?token={reset_token}"
-        self.notification_repo.create_notification(
-            recipient_id=email, title="Password Reset Request",
-            message=f"Click the following link to reset your password: {reset_url}",
-            notification_type="system",
-            metadata={'expires_at': expires_at.isoformat()}
-        )
-    return True
+            reset_url = f"https://eduplatform.example.com/reset-password?token={reset_token}"
+            self.notification_repo.create_notification(
+                recipient_id=email, title="Password Reset Request",
+                message=f"Click the following link to reset your password: {reset_url}",
+                notification_type="system",
+                metadata={'expires_at': expires_at.isoformat()}
+            )
+        return True
 
     def reset_password(self, token: str, new_password: str) -> bool:
-      token_data = self._reset_tokens.get(token)
-      if not token_data or datetime.now() > token_data['expires_at']:
-        self._reset_tokens.pop(token, None)
-        return False
+        token_data = self._reset_tokens.get(token)
+        if not token_data or datetime.now() > token_data['expires_at']:
+            self._reset_tokens.pop(token, None)
+            return False
 
-      user = self.user_repo.get_by_email(token_data['email'])
-      del self._reset_tokens[token]     # single-use, regardless of outcome
-      if not user:
-        return False
+        user = self.user_repo.get_by_email(token_data['email'])
+        del self._reset_tokens[token]     # single-use, regardless of outcome
+        if not user:
+            return False
 
-      user_email = token_data['email']
-      user._password_hash, user._salt = user._hash_password(new_password)
-      self.user_repo.update(user)
-    
-      # Notify user of password change
-      self.notification_repo.create_notification(
-        recipient_id=user_email,
-        title="Password Changed",
-        message="Your password has been successfully changed. If you didn't make this change, please contact support immediately.",
-        notification_type="security"
-      )
-        
-      return True
+        user_email = token_data['email']
+        user._password_hash, user._salt = user._hash_password(new_password)
+        self.user_repo.update(user)
+      
+        # Notify user of password change
+        self.notification_repo.create_notification(
+            recipient_id=user_email,
+            title="Password Changed",
+            message="Your password has been successfully changed. If you didn't make this change, please contact support immediately.",
+            notification_type="security"
+        )
+          
+        return True
 
     def _generate_token(self, user: User) -> str:
         """Generate a JWT token for the user."""
@@ -165,7 +152,7 @@ class AuthService:
         }
         
         return jwt.encode(payload, self.jwt_secret, algorithm='HS256')
-    
+
     def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify a JWT token and return the decoded payload if valid."""
         try:
@@ -175,7 +162,7 @@ class AuthService:
             return None
         except jwt.InvalidTokenError:
             return None
-    
+
     def get_current_user(self, token: str) -> Optional[User]:
         """Get the current user from a JWT token."""
         payload = self.verify_token(token)
@@ -183,13 +170,13 @@ class AuthService:
             return None
             
         return self.user_repo.get_by_email(payload['user_id'])
-    
+
     def update_profile(self, 
-                     user: User, 
-                     full_name: Optional[str] = None,
-                     email: Optional[str] = None,
-                     phone: Optional[str] = None,
-                     address: Optional[str] = None) -> User:
+                       user: User, 
+                       full_name: Optional[str] = None,
+                       email: Optional[str] = None,
+                       phone: Optional[str] = None,
+                       address: Optional[str] = None) -> User:
         """Update a user's profile information.
         
         Args:

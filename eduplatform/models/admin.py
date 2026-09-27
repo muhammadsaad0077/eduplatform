@@ -196,7 +196,7 @@ class Admin(User):
         for item in data:
             profile = item.get_profile()
             values = ', '.join(
-                f"'{str(v).replace("'", "''")}'" if v is not None else 'NULL' 
+                f"""'{str(v).replace("'", "''")}'""" if v is not None else 'NULL' 
                 for v in profile.values()
             )
             inserts.append(f"INSERT INTO {table_name} ({columns}) VALUES ({values});")

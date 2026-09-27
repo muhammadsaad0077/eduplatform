@@ -37,12 +37,6 @@ class GradeService:
             'updated_at': grade._updated_at.isoformat() if grade._updated_at else None
         }
 
-    # get_student_grades now just does:
-    result = [self._serialize_grade(grade) for grade in grades]
-
-    # get_class_grades now just does:
-    student_grades = [self._serialize_grade(grade) for grade in grades]
-    
     def record_grade(self,
                     student_id: str,
                     subject: str,
@@ -261,6 +255,9 @@ class GradeService:
         if end_date:
             grades = [g for g in grades if g._created_at <= end_date]
              
+        # Convert to dictionary format
+        result = [self._serialize_grade(grade) for grade in grades]
+
         # Sort by creation date (newest first)
         result.sort(key=lambda x: x['created_at'], reverse=True)
         return result
@@ -294,8 +291,8 @@ class GradeService:
             student = self.user_repo.get(student_id)
             if not student:
                 continue
-                
-                 
+                student_grades = [self._serialize_grade(grade) for grade in grades]
+
             # Sort by creation date (newest first)
             student_grades.sort(key=lambda x: x['created_at'], reverse=True)
             
